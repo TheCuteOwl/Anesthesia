@@ -5,6 +5,11 @@ A good discord RAT that's use discord bot as C2
 
 V1 RELEASED
 
+## Current features
+
+Multi session handling
+Nothing much
+
 ## Anesthesia Commands
 
 1. **startup:** Add to startup
