@@ -1,7 +1,7 @@
 # Anesthesia
 A good discord RAT that's use discord bot as C2
 
-# Waiting for new idea 
+# Waiting for new idea, give me please
 
 V1.1 RELEASED
 
